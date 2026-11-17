@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>skillTransfer Studio</title>
+  <meta name="description" content="skillTransfer Studio — Browser-based control, data collection (lerobot-record), calibration, dataset v3.0 editing, policy training, and async inference console for LeRobot v0.4.4." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Minimal Header with Unmistakable Global Live Recording Indicator -->
+    <header class="topbar">
+      <div class="brand-group">
+        <div class="brand-mark">ST</div>
+        <h1 class="brand-title">
+          skillTransfer Studio
+          <span class="version-tag">v0.4.4</span>
+        </h1>
+      </div>
+
+      <!-- Center Always-Visible Live Recording / Reset Pill -->
+      <div class="global-rec-pill" id="global-rec-pill">
+        <span class="status-dot" id="global-rec-dot"></span>
+        <span id="global-rec-text">대기 중 (STANDBY)</span>
+        <span class="global-rec-time" id="global-rec-time">00:00.0</span>
+      </div>
+
+      <div class="topbar-metrics">
+        <div class="metric-chip" id="chip-ws-status">
+          <span class="status-dot" id="ws-dot"></span>
+          <strong id="ws-label">Connecting...</strong>
+          <span style="opacity:0.4;">·</span>
+          <strong id="loop-fps-readout">30.0 Hz</strong>
+        </div>
+        <div class="metric-chip" style="display:none;">
+          <strong id="runtime-mode-label">v0.4.4 Sim Bridge</strong>
+          <strong id="topbar-ep-count">3 eps</strong>
+        </div>
+        <button type="button" class="btn" id="btn-open-config-drawer" style="padding:6px 14px; font-size:12px; border-radius:9999px; border-color:#09090b;">
+          <span>수집 설정 · CLI</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Clean Pill Navigation Bar -->
+    <div class="subnav-bar">
+      <div class="subnav-inner">
+        <nav class="nav-list" id="main-nav" aria-label="LeRobot v0.4.4 Modules">
+          <button type="button" class="nav-btn active" data-view="view-record" id="nav-record">
+            <span>데이터 수집</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="view-hardware" id="nav-hardware">
+            <span>하드웨어 · 캘리브레이션</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="view-teleop" id="nav-teleop">
+            <span>텔레오퍼레이션 · 재생</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="view-dataset" id="nav-dataset">
+            <span>데이터셋 v3.0 (<span id="nav-saved-eps">3</span>)</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="view-train" id="nav-train">
+            <span>정책 학습 · 평가</span>
+          </button>
+          <button type="button" class="nav-btn" data-view="view-async" id="nav-async">
+            <span>비동기 추론 · 진단</span>
+          </button>
+        </nav>
+
+        <div class="shortcut-hint-inline">
+          <span><kbd class="kbd">→</kbd> 조기종료(Reset) / 즉시 기록</span>
+          <span><kbd class="kbd">←</kbd> 폐기(Reset)</span>
+          <span><kbd class="kbd">ESC</kbd> 종료</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Workspace Area -->
+    <main class="workspace">
+
+      <!-- ================================================================
+           VIEW 1: FOCUSED DATA COLLECTION STUDIO (`lerobot-record`)
+           Clean, uncluttered single-column layout centered on Cameras + Transport
+           ================================================================ -->
+      <section class="view-panel active" id="view-record">
+        <!-- 1. Compact Active Session Summary Strip -->
+        <div class="session-summary-strip">
+          <div class="summary-left">
+            <span class="badge solid-black" id="active-robot-badge">so101_follower</span>
+            <span class="badge" id="active-mode-badge">Teleop Collection Mode</span>
+            <span class="summary-repo" id="summary-repo-label">lerobot_user/so101_pick_place</span>
+            <span class="summary-divider">/</span>
+            <span class="summary-task" id="summary-task-label">"Grab the red cube and place it into the target tray"</span>
+          </div>
+          <button type="button" class="link-action-btn" id="btn-open-config-inline">파라미터 편집</button>
+        </div>
+
+        <!-- 2. Focused Camera & Transport Card -->
+        <div class="panel focused-stage-panel">
+          <!-- Concise Live Status Strip -->
+          <div class="live-status-banner" id="live-status-banner">
+            <div class="banner-left">
+              <span class="banner-icon-dot" id="banner-icon-dot"></span>
+              <span class="banner-state-chip" id="banner-state-chip">STANDBY</span>
+              <span class="banner-headline" id="banner-headline">세션 대기 중 — [수집 시작]을 누르면 녹화가 시작됩니다</span>
+            </div>
+            <div class="banner-subdesc" id="banner-subdesc">
+              조기종료(<kbd class="kbd">→</kbd>)와 폐기(<kbd class="kbd">←</kbd>) 모두 안전하게 <strong>환경 Reset</strong>으로 이동합니다
+            </div>
+            <!-- Hidden stepper spans preserved for JS state hooks -->
+            <div style="display:none;">
+              <span id="flow-step-rec"></span><span id="flow-step-rst"></span><span id="flow-step-done"></span>
+              <span id="session-state-pill"></span><span id="writer-threads-badge"></span>
+            </div>
+          </div>
+
+          <!-- Dual Large Camera Viewports -->
+          <div class="camera-grid" id="record-camera-grid">
+            <div class="camera-viewport" id="cam-viewport-0">
+              <canvas id="cam-canvas-0" width="560" height="350"></canvas>
+              <div class="camera-overlay-top">
+                <span class="cam-pill" id="cam-label-0">front · 30fps</span>
+                <span class="cam-tally-badge" id="cam-tally-0">
+                  <span class="cam-tally-dot"></span>
+                  <span id="cam-tally-text-0">REC</span>
+                </span>
+              </div>
+              <div class="camera-overlay-bottom">
+                <span class="cam-pill" id="cam-timecode-0">TC 00:00.0 · F:0000</span>
+                <span class="cam-pill" id="cam-codec-0">MP4 (libsvtav1)</span>
+              </div>
+            </div>
+            <div class="camera-viewport" id="cam-viewport-1">
+              <canvas id="cam-canvas-1" width="560" height="350"></canvas>
+              <div class="camera-overlay-top">
+                <span class="cam-pill" id="cam-label-1">wrist · 30fps</span>
+                <span class="cam-tally-badge" id="cam-tally-1">
+                  <span class="cam-tally-dot"></span>
+                  <span id="cam-tally-text-1">REC</span>
+                </span>
+              </div>
+              <div class="camera-overlay-bottom">
+                <span class="cam-pill">● Sync Locked</span>
+                <span class="cam-pill">Eye-in-Hand</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Clean Episode Transport Deck -->
+          <div class="episode-deck" style="margin-bottom:0;">
+            <div class="deck-top">
+              <div class="phase-readout">
+                <span class="deck-state-pill" id="deck-state-pill">IDLE</span>
+                <div class="phase-timer-stack">
+                  <span class="phase-state" id="deck-phase-name">현재 세션 대기 중</span>
+                  <span class="phase-timer" id="deck-timer">00.0s / 30.0s</span>
+                </div>
+              </div>
+              <div class="deck-counters">
+                <div class="counter-item">
+                  <div class="counter-label">Episode</div>
+                  <div class="counter-val" id="deck-ep-index">0 / 10</div>
+                </div>
+                <div class="counter-item">
+                  <div class="counter-label">Frames</div>
+                  <div class="counter-val" id="deck-frame-count">0</div>
+                </div>
+                <div class="counter-item">
+                  <div class="counter-label">Discarded</div>
+                  <div class="counter-val" id="deck-rerecord-count">0</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="progress-track">
+              <div class="progress-fill" id="deck-progress-bar"></div>
+            </div>
+
+            <!-- 4 Spacious Black & White Action Buttons -->
+            <div class="transport-row">
+              <button type="button" class="btn btn-rec-start" id="btn-start-record">
+                <span class="rec-dot-indicator"></span>
+                <span id="btn-start-label">수집 시작</span>
+              </button>
+              <button type="button" class="btn btn-step-reset" id="btn-key-right" disabled title="녹화 중 클릭 시 저장 후 환경 Reset 진입 / Reset 중 다시 클릭 시 즉시 기록 시작">
+                <span id="btn-right-label">조기종료 · Reset 이동</span>
+                <span class="kbd">→</span>
+              </button>
+              <button type="button" class="btn btn-step-discard" id="btn-key-left" disabled title="현재 에피소드를 폐기하고 환경 Reset 시간으로 이동">
+                <span id="btn-left-label">폐기 · Reset 이동</span>
+                <span class="kbd">←</span>
+              </button>
+              <button type="button" class="btn btn-danger" id="btn-key-esc" disabled title="세션 즉시 종료 및 비디오 인코딩">
+                <span>종료</span>
+                <span class="kbd">ESC</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Progressive Disclosure: Joint Telemetry & Logs (Collapsed by Default) -->
+        <details class="diagnostics-fold">
+          <summary class="diagnostics-summary">
+            <span>실시간 관절 파형 (`observation.state` / `action`) 및 브릿지 로그 펼치기</span>
+            <span class="badge" id="latency-badge">Loop: 4.3 ms</span>
+          </summary>
+          <div class="diagnostics-body">
+            <div>
+              <canvas id="telemetry-wave-canvas" width="640" height="115" style="width:100%; height:115px; background:var(--bg-input); border-radius:var(--radius-sm); border:1px solid var(--border-subtle); margin-bottom:10px;"></canvas>
+              <div class="joint-bars" id="live-joint-bars"></div>
+            </div>
+            <div>
+              <div class="log-stream" id="record-log-stream" style="height:185px;"></div>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- ================================================================
+           SLIDE-OVER DRAWER: RecordConfig + DatasetRecordConfig + CLI/Python
+           ================================================================ -->
+      <div class="drawer-backdrop" id="config-drawer-backdrop"></div>
+      <aside class="config-drawer" id="config-drawer" aria-label="Record Configuration Drawer">
+        <div class="drawer-header">
+          <div>
+            <h3 class="panel-title">수집 파라미터 &amp; CLI / Python 내보내기</h3>
+            <span style="font-size:11.5px; color:var(--text-muted);">`RecordConfig` · `DatasetRecordConfig` (`lerobot==0.4.4`)</span>
+          </div>
+          <button type="button" class="btn" id="btn-close-config-drawer" style="padding:5px 11px; font-size:12px;">닫기 ✕</button>
+        </div>
+
+        <div class="drawer-body">
+          <div id="record-validation-box"></div>
+
+          <div class="segmented-tabs" role="tablist">
+            <button type="button" class="seg-btn active" data-mode="teleop" id="mode-btn-teleop">Teleop 수집</button>
+            <button type="button" class="seg-btn" data-mode="policy" id="mode-btn-policy">Policy 평가</button>
+            <button type="button" class="seg-btn" data-mode="hil_both" id="mode-btn-hil">HIL 개입 (Both)</button>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="rec-robot-type">Follower 로봇 <span class="flag-hint">--robot.type</span></label>
+              <select id="rec-robot-type" class="mono"></select>
+            </div>
+            <div class="form-field">
+              <label for="rec-robot-port">로봇 포트 <span class="flag-hint">--robot.port</span></label>
+              <input type="text" id="rec-robot-port" class="mono" value="/dev/ttyACM0" />
+            </div>
+            <div class="form-field">
+              <label for="rec-robot-id">로봇 ID <span class="flag-hint">--robot.id</span></label>
+              <input type="text" id="rec-robot-id" class="mono" value="my_so101_follower" />
+            </div>
+            <div class="form-field">
+              <label for="rec-max-rel">상대타겟 상한 <span class="flag-hint">max_relative_target</span></label>
+              <input type="number" id="rec-max-rel" class="mono" placeholder="선택 (예: 5)" />
+            </div>
+
+            <div class="form-field teleop-only-field">
+              <label for="rec-teleop-type">Teleoperator <span class="flag-hint">--teleop.type</span></label>
+              <select id="rec-teleop-type" class="mono"></select>
+            </div>
+            <div class="form-field teleop-only-field">
+              <label for="rec-teleop-port">Teleop 포트 <span class="flag-hint">--teleop.port</span></label>
+              <input type="text" id="rec-teleop-port" class="mono" value="/dev/ttyACM1" />
+            </div>
+            <div class="form-field full teleop-only-field">
+              <label for="rec-teleop-id">Teleop ID <span class="flag-hint">--teleop.id</span></label>
+              <input type="text" id="rec-teleop-id" class="mono" value="my_so101_leader" />
+            </div>
+
+            <div class="form-field full policy-only-field" style="display:none;">
+              <label for="rec-policy-path">정책 경로 / Hub ID <span class="flag-hint">--policy.path</span></label>
+              <input type="text" id="rec-policy-path" class="mono" value="outputs/train/act_so101/checkpoints/last/pretrained_model" />
+            </div>
+
+            <div class="form-field full" style="margin-top:4px; padding-top:10px; border-top:1px solid var(--border-subtle);">
+              <label for="rec-repo-id">데이터셋 저장소 ID <span class="flag-hint">--dataset.repo_id</span></label>
+              <input type="text" id="rec-repo-id" class="mono" value="lerobot_user/so101_pick_place" />
+            </div>
+            <div class="form-field full">
+              <label for="rec-single-task">작업 지시 자연어 설명 <span class="flag-hint">--dataset.single_task</span></label>
+              <input type="text" id="rec-single-task" value="Grab the red cube and place it into the target tray" />
+            </div>
+
+            <div class="form-field">
+              <label for="rec-num-episodes">목표 에피소드 수</label>
+              <input type="number" id="rec-num-episodes" class="mono" value="10" min="1" max="5000" />
+            </div>
+            <div class="form-field">
+              <label for="rec-fps">수집 주파수 (Hz)</label>
+              <input type="number" id="rec-fps" class="mono" value="30" min="5" max="120" />
+            </div>
+            <div class="form-field">
+              <label for="rec-ep-time">에피소드 제한시간(초)</label>
+              <input type="number" id="rec-ep-time" class="mono" value="30" min="1" max="7200" />
+            </div>
+            <div class="form-field">
+              <label for="rec-reset-time">환경 Reset 시간(초)</label>
+              <input type="number" id="rec-reset-time" class="mono" value="10" min="0" max="600" />
+            </div>
+
+            <div class="form-field">
+              <label for="rec-vcodec">비디오 코덱</label>
+              <select id="rec-vcodec" class="mono">
+                <option value="libsvtav1">libsvtav1 (AV1)</option>
+                <option value="h264">h264</option>
+                <option value="hevc">hevc</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="rec-writer-threads">카메라당 스레드</label>
+              <input type="number" id="rec-writer-threads" class="mono" value="4" min="1" max="16" />
+            </div>
+
+            <div class="form-field full" style="margin-top:4px;">
+              <label>
+                <span>카메라 (`--robot.cameras`)</span>
+                <button type="button" class="btn" id="btn-add-camera" style="padding:3px 8px; font-size:11px;">+ 추가</button>
+              </label>
+              <div class="cam-builder-list" id="rec-camera-list"></div>
+            </div>
+
+            <div class="form-field full">
+              <div class="toggle-row">
+                <label class="check-label"><input type="checkbox" id="rec-video" checked /> MP4 비디오 (`video`)</label>
+                <label class="check-label"><input type="checkbox" id="rec-push-hub" /> Hub 업로드 (`push_to_hub`)</label>
+                <label class="check-label"><input type="checkbox" id="rec-private" /> 비공개 (`private`)</label>
+                <label class="check-label"><input type="checkbox" id="rec-display" checked /> Rerun 표시 (`display_data`)</label>
+                <label class="check-label"><input type="checkbox" id="rec-sounds" checked /> 음성 안내 (`play_sounds`)</label>
+                <label class="check-label"><input type="checkbox" id="rec-resume" /> 이어서 녹화 (`resume`)</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- CLI & Python Export inside Drawer -->
+          <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border-subtle);">
+            <div class="panel-header" style="margin-bottom:8px;">
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="btn btn-cyan" id="tab-code-cli" style="padding:5px 10px; font-size:11.5px;">CLI 명령어</button>
+                <button type="button" class="btn" id="tab-code-py" style="padding:5px 10px; font-size:11.5px;">Python API</button>
+              </div>
+              <button type="button" class="btn" id="btn-copy-record-code" style="padding:5px 10px; font-size:11.5px;">복사</button>
+            </div>
+            <pre class="code-box" id="record-generated-code"></pre>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ================================================================
+           VIEW 2: HARDWARE SETUP & CALIBRATION
+           (`find-port`, `setup-motors`, `calibrate`, `find-cameras`, `find-joint-limits`)
+           ================================================================ -->
+      <section class="view-panel" id="view-hardware">
+        <div class="view-header">
+          <div>
+            <h2>하드웨어 설정 &amp; 캘리브레이션 스위트</h2>
+            <p>`lerobot-find-port` · `lerobot-setup-motors` · `lerobot-calibrate` · `lerobot-find-cameras` · `lerobot-find-joint-limits`</p>
+          </div>
+          <span class="badge cyan">Feetech STS3215 / Dynamixel / RealSense / OpenCV</span>
+        </div>
+
+        <div class="grid-2col">
+          <!-- 2-1. USB Port Scanner & Camera Scanner -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">1) MotorsBus USB 포트 &amp; 연결 카메라 스캐너</h3>
+              <div style="display:flex; gap:6px;">
+                <button type="button" class="btn btn-cyan" id="btn-scan-ports">포트 스캔 (`find-port`)</button>
+                <button type="button" class="btn" id="btn-scan-cams">카메라 스캔 (`find-cameras`)</button>
+              </div>
+            </div>
+            <p style="margin:0 0 10px; font-size:12.5px; color:var(--text-secondary);">
+              호스트 리눅스 `/dev/ttyACM*`, `/dev/ttyUSB*`, `/dev/video*`를 실시간 탐색하고, 클릭 한 번으로 수집 설정에 반영합니다.
+            </p>
+            <table class="data-table" id="hw-ports-table">
+              <thead>
+                <tr>
+                  <th>포트 / 식별자</th>
+                  <th>디바이스 설명</th>
+                  <th>상태</th>
+                  <th>빠른 할당</th>
+                </tr>
+              </thead>
+              <tbody id="hw-scan-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- 2-2. Motor ID Initialization Wizard (`lerobot-setup-motors`) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">2) 모터 ID 순차 플래싱 위저드 (`lerobot-setup-motors`)</h3>
+              <span class="badge amber">ID 6 → 1 역순 연결</span>
+            </div>
+            <div class="form-grid" style="margin-bottom:12px;">
+              <div class="form-field">
+                <label for="motor-role">대상 구분</label>
+                <select id="motor-role" class="mono">
+                  <option value="robot">Follower Robot (--robot)</option>
+                  <option value="teleop">Leader Teleop (--teleop)</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="motor-dev-type">하드웨어 타입</label>
+                <input type="text" id="motor-dev-type" class="mono" value="so101_follower" />
+              </div>
+              <div class="form-field full">
+                <label for="motor-port">연결 USB 포트</label>
+                <input type="text" id="motor-port" class="mono" value="/dev/ttyACM0" />
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(6, 1fr); gap:6px; margin-bottom:12px;">
+              <div class="badge amber" style="text-align:center; padding:6px 4px;">#6 Gripper</div>
+              <div class="badge" style="text-align:center; padding:6px 4px;">#5 Wrist Roll</div>
+              <div class="badge" style="text-align:center; padding:6px 4px;">#4 Wrist Flex</div>
+              <div class="badge" style="text-align:center; padding:6px 4px;">#3 Elbow Flex</div>
+              <div class="badge" style="text-align:center; padding:6px 4px;">#2 Shldr Lift</div>
+              <div class="badge" style="text-align:center; padding:6px 4px;">#1 Shldr Pan</div>
+            </div>
+            <pre class="code-box" id="motor-setup-cmd"></pre>
+          </div>
+
+          <!-- 2-3. Calibration (`lerobot-calibrate`) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">3) 로봇 &amp; 리더 암 캘리브레이션 (`lerobot-calibrate`)</h3>
+              <span class="badge green">JSON 오프셋 자동 생성</span>
+            </div>
+            <div class="form-grid" style="margin-bottom:12px;">
+              <div class="form-field">
+                <label for="cal-role">캘리브레이션 대상</label>
+                <select id="cal-role" class="mono">
+                  <option value="robot">Follower Arm (--robot.*)</option>
+                  <option value="teleop">Leader Arm (--teleop.*)</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="cal-type">모델 타입</label>
+                <input type="text" id="cal-type" class="mono" value="so101_follower" />
+              </div>
+              <div class="form-field">
+                <label for="cal-port">포트</label>
+                <input type="text" id="cal-port" class="mono" value="/dev/ttyACM0" />
+              </div>
+              <div class="form-field">
+                <label for="cal-id">캘리브레이션 프로필 ID</label>
+                <input type="text" id="cal-id" class="mono" value="my_so101_follower" />
+              </div>
+            </div>
+            <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">
+              저장 경로: <code id="cal-file-path" style="color:var(--accent-cyan);">~/.cache/huggingface/lerobot/calibration/robots/so101_follower/my_so101_follower.json</code>
+            </div>
+            <pre class="code-box" id="cal-cmd-box"></pre>
+          </div>
+
+          <!-- 2-4. Joint & End-Effector Limits (`lerobot-find-joint-limits`) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">4) 관절 &amp; 엔드이펙터 가동범위 추출 (`lerobot-find-joint-limits`)</h3>
+              <span class="badge cyan">HIL-SERL 안전 바운더리</span>
+            </div>
+            <p style="margin:0 0 12px; font-size:12.5px; color:var(--text-secondary);">
+              캘리브레이션 완료 후 리더 암으로 로봇을 움직여 실제 작업 공간의 최소/최대 엔벨로프(`end_effector_bounds` 및 관절 한계)를 추출합니다.
+            </p>
+            <pre class="code-box" id="joint-limits-cmd-box">lerobot-find-joint-limits \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM0 \
+  --teleop.type=so101_leader \
+  --teleop.port=/dev/ttyACM1</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 3: TELEOPERATION & EPISODE REPLAY
+           (`lerobot-teleoperate`, `lerobot-replay`, Processor Pipeline)
+           ================================================================ -->
+      <section class="view-panel" id="view-teleop">
+        <div class="view-header">
+          <div>
+            <h2>실시간 텔레오퍼레이션 &amp; 에피소드 리플레이</h2>
+            <p>녹화 전 하드웨어 미러링 테스트(`lerobot-teleoperate`), 브라우저 관절 오프셋 주입, 저장된 에피소드 실기기 재생(`lerobot-replay`)</p>
+          </div>
+          <span class="badge amber">RobotProcessorPipeline 지원</span>
+        </div>
+
+        <div class="grid-2col">
+          <!-- Interactive Browser Joint Offset Injector + Live Teleop CLI -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">실시간 브라우저 관절 오프셋 테스트 &amp; `lerobot-teleoperate`</h3>
+              <button type="button" class="btn" id="btn-reset-offsets" style="padding:4px 10px; font-size:11.5px;">오프셋 초기화</button>
+            </div>
+            <p style="margin:0 0 12px; font-size:12.5px; color:var(--text-secondary);">
+              아래 슬라이더를 조절하면 WebSocket을 통해 Python 브릿지의 실시간 30Hz 관절 스트림에 즉시 반영됩니다.
+            </p>
+            <div id="teleop-slider-list" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px 16px; margin-bottom:16px;"></div>
+
+            <div class="panel-header" style="margin-bottom:8px;">
+              <h4 class="panel-title" style="font-size:13px;">`lerobot-teleoperate` 실행 명령어</h4>
+            </div>
+            <pre class="code-box" id="teleop-cmd-box"></pre>
+          </div>
+
+          <!-- Episode Replay (`lerobot-replay`) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">저장된 에피소드 로봇 재생 (`lerobot-replay`)</h3>
+              <span class="badge green">궤적 재현 검증</span>
+            </div>
+            <div class="form-grid" style="margin-bottom:14px;">
+              <div class="form-field full">
+                <label for="replay-repo-id">재생할 데이터셋 Repo ID <span class="flag-hint">--dataset.repo_id</span></label>
+                <input type="text" id="replay-repo-id" class="mono" value="lerobot_user/so101_pick_place" />
+              </div>
+              <div class="form-field">
+                <label for="replay-ep-idx">에피소드 인덱스 <span class="flag-hint">--dataset.episode</span></label>
+                <input type="number" id="replay-ep-idx" class="mono" value="0" min="0" />
+              </div>
+              <div class="form-field">
+                <label for="replay-robot-port">팔로워 로봇 포트 <span class="flag-hint">--robot.port</span></label>
+                <input type="text" id="replay-robot-port" class="mono" value="/dev/ttyACM0" />
+              </div>
+            </div>
+            <pre class="code-box" id="replay-cmd-box"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 4: DATASET v3.0 STUDIO
+           (`lerobot-edit-dataset`, `lerobot-dataset-viz`, `lerobot-imgtransform-viz`)
+           ================================================================ -->
+      <section class="view-panel" id="view-dataset">
+        <div class="view-header">
+          <div>
+            <h2>LeRobotDataset v3.0 편집 &amp; 시각화 스튜디오</h2>
+            <p>수집된 에피소드 검수 · 불량 에피소드 선택 삭제 · Train/Val 분할 · 병합 · 피처 제거 · 이미지 증강(`imgtransform-viz`) 미리보기</p>
+          </div>
+          <span class="badge cyan">Parquet Chunks + Shared MP4</span>
+        </div>
+
+        <div class="grid-2col">
+          <!-- Episode Table with Multi-select Delete -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">수집된 에피소드 목록 (`meta/episodes/`)</h3>
+              <button type="button" class="btn btn-danger" id="btn-delete-selected-eps" style="padding:5px 10px; font-size:11.5px;">
+                선택 에피소드 삭제 (`delete_episodes`)
+              </button>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>선택</th>
+                  <th>Ep #</th>
+                  <th>Task 지시문</th>
+                  <th>프레임 / 길이</th>
+                  <th>Parquet 청크</th>
+                </tr>
+              </thead>
+              <tbody id="dataset-episodes-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- `lerobot-edit-dataset` All 6 Operations Builder -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">`lerobot-edit-dataset` 작업 빌더</h3>
+              <button type="button" class="btn btn-primary" id="btn-run-ds-edit" style="padding:5px 12px; font-size:12px;">적용 &amp; 명령어 생성</button>
+            </div>
+            <div class="form-grid" style="margin-bottom:12px;">
+              <div class="form-field">
+                <label for="ds-edit-repo">대상 데이터셋 (`--repo_id`)</label>
+                <input type="text" id="ds-edit-repo" class="mono" value="lerobot_user/so101_pick_place" />
+              </div>
+              <div class="form-field">
+                <label for="ds-edit-new-repo">새 저장소로 사본 저장 (`--new_repo_id`)</label>
+                <input type="text" id="ds-edit-new-repo" class="mono" placeholder="비워두면 원본 수정" />
+              </div>
+              <div class="form-field full">
+                <label for="ds-op-type">편집 작업 유형 (`--operation.type`)</label>
+                <select id="ds-op-type" class="mono">
+                  <option value="delete_episodes">delete_episodes — 특정 에피소드 삭제</option>
+                  <option value="split">split — 비율(train/val) 또는 인덱스로 데이터셋 분할</option>
+                  <option value="merge">merge — 여러 수집 데이터셋 하나로 병합</option>
+                  <option value="remove_feature">remove_feature — 특정 카메라/피처 제거</option>
+                  <option value="modify_tasks">modify_tasks — 자연어 태스크 설명 일괄 수정</option>
+                  <option value="convert_image_to_video">convert_image_to_video — PNG 데이터셋을 MP4로 변환</option>
+                </select>
+              </div>
+              <div class="form-field full">
+                <label for="ds-op-arg" id="ds-op-arg-label">작업 파라미터</label>
+                <input type="text" id="ds-op-arg" class="mono" value="[0]" />
+              </div>
+              <div class="form-field full">
+                <label class="check-label"><input type="checkbox" id="ds-push-hub" /> 편집 완료 후 Hugging Face Hub로 업로드 (`--push_to_hub`)</label>
+              </div>
+            </div>
+            <div id="ds-edit-feedback" style="font-size:12px; color:var(--accent-green); margin-bottom:8px;"></div>
+            <pre class="code-box" id="ds-edit-cmd-box"></pre>
+          </div>
+
+          <!-- `lerobot-dataset-viz` & `lerobot-imgtransform-viz` Interactive Preview -->
+          <div class="panel" style="grid-column: 1 / -1;">
+            <div class="panel-header">
+              <h3 class="panel-title">이미지 증강 시뮬레이터 (`lerobot-imgtransform-viz`) &amp; Rerun 뷰어 (`lerobot-dataset-viz`)</h3>
+              <span class="badge">Training-Time Data Augmentation</span>
+            </div>
+            <div class="grid-2col" style="align-items:center;">
+              <div class="form-grid">
+                <div class="form-field">
+                  <label for="aug-bright">Brightness (밝기): <span id="val-aug-bright" class="flag-hint">1.00</span></label>
+                  <input type="range" id="aug-bright" min="50" max="160" value="100" />
+                </div>
+                <div class="form-field">
+                  <label for="aug-contrast">Contrast (대비): <span id="val-aug-contrast" class="flag-hint">1.00</span></label>
+                  <input type="range" id="aug-contrast" min="50" max="170" value="100" />
+                </div>
+                <div class="form-field">
+                  <label for="aug-sat">Saturation (채도): <span id="val-aug-sat" class="flag-hint">1.00</span></label>
+                  <input type="range" id="aug-sat" min="20" max="200" value="100" />
+                </div>
+                <div class="form-field">
+                  <label for="aug-hue">Hue Shift (색조): <span id="val-aug-hue" class="flag-hint">0 deg</span></label>
+                  <input type="range" id="aug-hue" min="-60" max="60" value="0" />
+                </div>
+                <div class="form-field full">
+                  <pre class="code-box" style="margin-top:6px;">lerobot-dataset-viz --repo-id=lerobot_user/so101_pick_place --episode-index=0
+lerobot-imgtransform-viz --repo-id=lerobot_user/so101_pick_place --output-dir=./transform_examples --n-examples=5</pre>
+                </div>
+              </div>
+              <div class="camera-viewport" style="max-height:230px;">
+                <canvas id="aug-preview-canvas" width="480" height="260"></canvas>
+                <div class="camera-overlay-top">
+                  <span class="cam-pill">ImageTransforms 실시간 증강 프리뷰</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 5: POLICY TRAINING & SIMULATION BENCHMARK EVALUATION
+           (`lerobot-train`, `lerobot-eval`)
+           ================================================================ -->
+      <section class="view-panel" id="view-train">
+        <div class="view-header">
+          <div>
+            <h2>정책 학습 (`lerobot-train`) &amp; 시뮬레이션 평가 (`lerobot-eval`)</h2>
+            <p>LeRobot v0.4.4 지원 전체 모방학습 · VLA · 강화학습 모델 구성 및 LIBERO / MetaWorld / ALOHA / PushT 벤치마크</p>
+          </div>
+          <span class="badge amber">ACT · Diffusion · SmolVLA · π₀ / π₀.₅ · GR00T N1.5 · HIL-SERL</span>
+        </div>
+
+        <div class="grid-2col">
+          <!-- Training Configurator -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">정책 학습 파이프라인 (`lerobot-train`)</h3>
+              <span class="badge green" id="policy-vram-badge">권장 VRAM: 6~8 GB</span>
+            </div>
+            <div class="form-grid" style="margin-bottom:12px;">
+              <div class="form-field full">
+                <label for="tr-policy-type">정책 아키텍처 (`--policy.type`)</label>
+                <select id="tr-policy-type" class="mono"></select>
+              </div>
+              <div class="form-field full">
+                <div id="tr-policy-desc" style="font-size:12px; color:var(--accent-cyan); padding:4px 0;"></div>
+              </div>
+              <div class="form-field">
+                <label for="tr-dataset">학습 데이터셋 (`--dataset.repo_id`)</label>
+                <input type="text" id="tr-dataset" class="mono" value="lerobot_user/so101_pick_place" />
+              </div>
+              <div class="form-field">
+                <label for="tr-policy-repo">출력 모델 Hub ID (`--policy.repo_id`)</label>
+                <input type="text" id="tr-policy-repo" class="mono" value="lerobot_user/act_so101_policy" />
+              </div>
+              <div class="form-field">
+                <label for="tr-device">연산 디바이스 (`--policy.device`)</label>
+                <select id="tr-device" class="mono">
+                  <option value="cuda">cuda (NVIDIA GPU)</option>
+                  <option value="mps">mps (Apple Silicon)</option>
+                  <option value="cpu">cpu</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="tr-steps">총 학습 스텝 (`--steps`)</label>
+                <input type="number" id="tr-steps" class="mono" value="100000" step="5000" />
+              </div>
+              <div class="form-field">
+                <label for="tr-batch">배치 크기 (`--batch_size`)</label>
+                <input type="number" id="tr-batch" class="mono" value="8" min="1" max="256" />
+              </div>
+              <div class="form-field">
+                <label for="tr-outdir">체크포인트 경로 (`--output_dir`)</label>
+                <input type="text" id="tr-outdir" class="mono" value="outputs/train/act_so101" />
+              </div>
+              <div class="form-field full">
+                <div class="toggle-row">
+                  <label class="check-label"><input type="checkbox" id="tr-peft" /> PEFT / LoRA 경량 파인튜닝 (`--policy.use_peft=true`)</label>
+                  <label class="check-label"><input type="checkbox" id="tr-wandb" checked /> Weights &amp; Biases 로깅 (`--wandb.enable=true`)</label>
+                  <label class="check-label"><input type="checkbox" id="tr-push" checked /> 완료 후 Hub 업로드 (`--policy.push_to_hub=true`)</label>
+                </div>
+              </div>
+            </div>
+            <pre class="code-box" id="train-cmd-box"></pre>
+          </div>
+
+          <!-- Simulation Benchmark Evaluation (`lerobot-eval`) -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">시뮬레이션 정량 평가 (`lerobot-eval` / EnvHub)</h3>
+              <span class="badge cyan">Gymnasium / IsaacLab Arena</span>
+            </div>
+            <div class="form-grid" style="margin-bottom:14px;">
+              <div class="form-field full">
+                <label for="ev-policy-path">평가할 체크포인트 또는 Hub ID (`--policy.path`)</label>
+                <input type="text" id="ev-policy-path" class="mono" value="lerobot/pi0_libero_finetuned" />
+              </div>
+              <div class="form-field">
+                <label for="ev-env-type">시뮬레이션 환경 (`--env.type`)</label>
+                <select id="ev-env-type" class="mono"></select>
+              </div>
+              <div class="form-field">
+                <label for="ev-env-task">태스크 스위트 (`--env.task`)</label>
+                <input type="text" id="ev-env-task" class="mono" value="libero_object" />
+              </div>
+              <div class="form-field">
+                <label for="ev-batch">병렬 환경 수 (`--eval.batch_size`)</label>
+                <input type="number" id="ev-batch" class="mono" value="2" min="1" max="64" />
+              </div>
+              <div class="form-field">
+                <label for="ev-eps">평가 에피소드 수 (`--eval.n_episodes`)</label>
+                <input type="number" id="ev-eps" class="mono" value="10" min="1" max="500" />
+              </div>
+            </div>
+            <pre class="code-box" id="eval-cmd-box"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 6: ASYNC INFERENCE (`policy_server` + `robot_client`) & `lerobot-info`
+           ================================================================ -->
+      <section class="view-panel" id="view-async">
+        <div class="view-header">
+          <div>
+            <h2>비동기 추론 (Async Inference · RTC) &amp; 시스템 진단</h2>
+            <p>v0.4.4 `lerobot.async_inference.policy_server` + `robot_client` (gRPC 원격 GPU 추론 &amp; Real-Time Chunking) 및 `lerobot-info`</p>
+          </div>
+          <span class="badge cyan">pip install "lerobot[async]==0.4.4"</span>
+        </div>
+
+        <div class="grid-2col">
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">분산 gRPC PolicyServer &amp; RobotClient 설정</h3>
+              <span class="badge amber">Real-Time Chunking</span>
+            </div>
+            <div class="form-grid" style="margin-bottom:12px;">
+              <div class="form-field">
+                <label for="as-host">GPU 서버 호스트</label>
+                <input type="text" id="as-host" class="mono" value="127.0.0.1" />
+              </div>
+              <div class="form-field">
+                <label for="as-port">gRPC 포트</label>
+                <input type="number" id="as-port" class="mono" value="8080" />
+              </div>
+              <div class="form-field">
+                <label for="as-policy-type">정책 타입 (`--policy_type`)</label>
+                <select id="as-policy-type" class="mono">
+                  <option value="smolvla">smolvla</option>
+                  <option value="pi0">pi0</option>
+                  <option value="pi05">pi05</option>
+                  <option value="act">act</option>
+                  <option value="groot">groot</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="as-policy-path">모델 경로 (`--pretrained_name_or_path`)</label>
+                <input type="text" id="as-policy-path" class="mono" value="lerobot/smolvla_base" />
+              </div>
+              <div class="form-field">
+                <label for="as-chunk">청크당 액션 수 (`actions_per_chunk`)</label>
+                <input type="number" id="as-chunk" class="mono" value="50" />
+              </div>
+              <div class="form-field">
+                <label for="as-thresh">청크 갱신 임계치 (`chunk_size_threshold`)</label>
+                <input type="number" id="as-thresh" class="mono" value="0.5" step="0.1" />
+              </div>
+              <div class="form-field full">
+                <label for="as-agg">중첩 청크 블렌딩 함수 (`--aggregate_fn_name`)</label>
+                <select id="as-agg" class="mono">
+                  <option value="weighted_average">weighted_average (권장 부드러운 궤적 블렌딩)</option>
+                  <option value="latest">latest (최신 추론 청크 우선)</option>
+                </select>
+              </div>
+            </div>
+            <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">Terminal A — GPU Policy Server</div>
+            <pre class="code-box" id="async-server-cmd" style="margin-bottom:10px;"></pre>
+            <div style="font-size:12px; font-weight:600; color:var(--text-secondary); margin-bottom:4px;">Terminal B — On-Robot Client</div>
+            <pre class="code-box" id="async-client-cmd"></pre>
+          </div>
+
+          <!-- System Diagnostics & Complete v0.4.4 CLI Registry -->
+          <div class="panel">
+            <div class="panel-header">
+              <h3 class="panel-title">런타임 환경 진단 (`lerobot-info`) &amp; v0.4.4 전체 CLI 카탈로그</h3>
+              <span class="badge green" id="diag-python-ver">Python 3.x</span>
+            </div>
+            <pre class="code-box" id="lerobot-info-box" style="margin-bottom:14px;"></pre>
+
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>v0.4.4 엔트리포인트</th>
+                  <th>기능 요약</th>
+                </tr>
+              </thead>
+              <tbody id="cli-catalog-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

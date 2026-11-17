@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>skillTransfer Studio</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --bw-bg: #fafafa;
+      --bw-surface: #ffffff;
+      --bw-subtle: #f4f4f5;
+      --bw-border: #e4e4e7;
+      --bw-border-strong: #18181b;
+      --bw-ink: #09090b;
+      --bw-muted: #71717a;
+      --bw-rec: #dc2626;
+    }
+
+    body {
+      background-color: var(--bw-bg) !important;
+      color: var(--bw-ink) !important;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 999px; }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.25; transform: scale(0.82); }
+    }
+    @keyframes recFramePulse {
+      0%, 100% { box-shadow: 0 0 0 2.5px #dc2626, 0 12px 28px -10px rgba(220, 38, 38, 0.28); }
+      50% { box-shadow: 0 0 0 2.5px rgba(220, 38, 38, 0.35), 0 12px 28px -10px rgba(220, 38, 38, 0.08); }
+    }
+    @keyframes resetFramePulse {
+      0%, 100% { box-shadow: 0 0 0 2.5px #09090b, 0 12px 28px -10px rgba(9, 9, 11, 0.18); }
+      50% { box-shadow: 0 0 0 2.5px rgba(9, 9, 11, 0.25), 0 12px 28px -10px rgba(9, 9, 11, 0.06); }
+    }
+
+    .pulse-live { animation: pulseDot 1s infinite ease-in-out; }
+    .cam-ring-rec { animation: recFramePulse 1.25s infinite ease-in-out; }
+    .cam-ring-reset { animation: resetFramePulse 1.4s infinite ease-in-out; }
+
+    .mono-card {
+      background: #ffffff;
+      border: 1px solid #e4e4e7;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.06);
+    }
+  </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col selection:bg-black selection:text-white">
+
+  <!-- ==================== CRISP WHITE & BLACK HEADER ==================== -->
+  <header class="border-b border-zinc-200 bg-white/95 backdrop-blur px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-black text-white font-mono font-bold text-xs flex items-center justify-center tracking-tighter">
+        ST
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="font-bold text-sm tracking-tight text-zinc-950">skillTransfer Studio</span>
+        <span class="font-mono text-[11px] px-2 py-0.5 rounded-full border border-zinc-300 text-zinc-700 font-medium">v0.4.4</span>
+      </div>
+
+      <!-- Monochrome Pill Navigation -->
+      <nav class="hidden md:flex items-center gap-1 ml-5 text-xs" aria-label="Primary">
+        <button type="button" data-tab="tab-record" class="nav-tab px-3.5 py-1.5 rounded-full font-semibold bg-black text-white transition-all">
+          데이터 수집
+        </button>
+        <button type="button" data-tab="tab-hw" class="nav-tab px-3.5 py-1.5 rounded-full font-medium text-zinc-500 hover:text-black transition-all">
+          하드웨어 · 텔레옵
+        </button>
+        <button type="button" data-tab="tab-dataset" class="nav-tab px-3.5 py-1.5 rounded-full font-medium text-zinc-500 hover:text-black transition-all">
+          데이터셋 (<span id="nav-ep-cnt">3</span>)
+        </button>
+        <button type="button" data-tab="tab-train" class="nav-tab px-3.5 py-1.5 rounded-full font-medium text-zinc-500 hover:text-black transition-all">
+          학습 · 추론 · CLI
+        </button>
+      </nav>
+    </div>
+
+    <!-- Center Unmistakable Monochrome / REC Live Pill -->
+    <div id="global-rec-pill" class="flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-zinc-300 bg-zinc-50 text-zinc-900 text-xs font-semibold transition-all">
+      <span id="global-rec-dot" class="w-2 h-2 rounded-full bg-zinc-400"></span>
+      <span id="global-rec-text">STANDBY · 대기 중</span>
+      <span id="global-rec-sub" class="font-mono text-zinc-500 tabular-nums">00.0s</span>
+    </div>
+
+    <!-- Right Quick Actions -->
+    <div class="flex items-center gap-2 text-xs">
+      <span class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-zinc-200 bg-zinc-50 font-mono text-zinc-700">
+        <span class="w-1.5 h-1.5 rounded-full bg-black"></span>
+        <span id="hdr-fps">30.0 Hz</span>
+      </span>
+      <button type="button" id="btn-open-drawer" class="px-3.5 py-1.5 rounded-full border border-zinc-900 bg-white text-zinc-950 hover:bg-zinc-950 hover:text-white font-semibold transition-all">
+        수집 설정 · CLI
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile Nav -->
+  <div class="md:hidden border-b border-zinc-200 bg-white px-4 py-2 flex gap-1.5 overflow-x-auto text-xs">
+    <button type="button" data-tab="tab-record" class="nav-tab px-3 py-1 rounded-full font-semibold bg-black text-white">데이터 수집</button>
+    <button type="button" data-tab="tab-hw" class="nav-tab px-3 py-1 rounded-full font-medium text-zinc-500">하드웨어·텔레옵</button>
+    <button type="button" data-tab="tab-dataset" class="nav-tab px-3 py-1 rounded-full font-medium text-zinc-500">데이터셋</button>
+    <button type="button" data-tab="tab-train" class="nav-tab px-3 py-1 rounded-full font-medium text-zinc-500">학습·추론</button>
+  </div>
+
+  <!-- ==================== FOCUSED MONOCHROME WORKSPACE ==================== -->
+  <main class="flex-1 w-full max-w-[1180px] mx-auto px-5 py-7">
+
+    <!-- =====================================================================
+         TAB 1: DATA COLLECTION STUDIO (Pure Black & White Minimalism)
+         ===================================================================== -->
+    <section id="tab-record" class="tab-view space-y-4">
+
+      <!-- 1. Minimal Summary Bar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-zinc-200 bg-white text-xs">
+        <div class="flex flex-wrap items-center gap-2.5 text-zinc-700">
+          <span id="summary-robot" class="font-mono font-semibold px-2.5 py-0.5 rounded-md bg-zinc-950 text-white">so101_follower</span>
+          <span id="summary-repo" class="font-mono text-zinc-500">lerobot_user/so101_pick_place</span>
+          <span class="hidden sm:inline text-zinc-300">/</span>
+          <span id="summary-task" class="font-medium text-zinc-900 truncate max-w-[380px]">"Grab the red cube and place it into the target tray"</span>
+        </div>
+        <button type="button" id="btn-open-drawer-inline" class="font-semibold text-zinc-950 underline underline-offset-4 hover:opacity-70">
+          파라미터 편집
+        </button>
+      </div>
+
+      <!-- 2. Main Camera & Control Card -->
+      <div class="mono-card rounded-2xl p-6 space-y-5">
+
+        <!-- Crisp Status Banner -->
+        <div id="stage-banner" class="rounded-xl px-4 py-3 border border-zinc-200 bg-zinc-50 flex flex-wrap items-center justify-between gap-3 transition-all">
+          <div class="flex items-center gap-3">
+            <span id="banner-dot" class="w-2.5 h-2.5 rounded-full bg-zinc-400"></span>
+            <span id="banner-chip" class="font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-zinc-200 text-zinc-900">STANDBY</span>
+            <span id="banner-msg" class="text-sm font-semibold text-zinc-950">[수집 시작]을 누르면 에피소드 기록이 시작됩니다</span>
+          </div>
+          <div id="banner-hint" class="text-xs text-zinc-500">
+            조기종료(<kbd class="font-mono px-1.5 py-0.5 rounded border border-zinc-300 bg-white text-zinc-900">→</kbd>) · 폐기(<kbd class="font-mono px-1.5 py-0.5 rounded border border-zinc-300 bg-white text-zinc-900">←</kbd>) 모두 <strong>환경 Reset</strong>으로 이동
+          </div>
+        </div>
+
+        <!-- Dual High-Contrast Camera Viewports -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Cam 0 -->
+          <div id="cam0-frame" class="relative rounded-xl overflow-hidden border border-zinc-300 bg-zinc-100 aspect-[16/10] transition-all">
+            <canvas id="cam0" width="560" height="350" class="w-full h-full block"></canvas>
+            <div class="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+              <span id="cam0-lbl" class="px-2.5 py-1 rounded-md bg-white/90 text-zinc-950 border border-zinc-200 font-mono text-xs font-medium shadow-xs">
+                front · 30fps
+              </span>
+              <span id="cam0-tally" class="hidden items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white font-mono text-xs font-bold shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-white pulse-live"></span>
+                <span id="cam0-tally-text">REC</span>
+              </span>
+            </div>
+            <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between font-mono text-xs pointer-events-none">
+              <span id="cam0-tc" class="px-2.5 py-0.5 rounded bg-white/90 text-zinc-900 border border-zinc-200 tabular-nums">00:00.0 · F:0000</span>
+              <span id="cam0-codec" class="px-2.5 py-0.5 rounded bg-white/90 text-zinc-600 border border-zinc-200">MP4 · libsvtav1</span>
+            </div>
+          </div>
+
+          <!-- Cam 1 -->
+          <div id="cam1-frame" class="relative rounded-xl overflow-hidden border border-zinc-300 bg-zinc-100 aspect-[16/10] transition-all">
+            <canvas id="cam1" width="560" height="350" class="w-full h-full block"></canvas>
+            <div class="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+              <span id="cam1-lbl" class="px-2.5 py-1 rounded-md bg-white/90 text-zinc-950 border border-zinc-200 font-mono text-xs font-medium shadow-xs">
+                wrist · 30fps
+              </span>
+              <span id="cam1-tally" class="hidden items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white font-mono text-xs font-bold shadow-sm">
+                <span class="w-2 h-2 rounded-full bg-white pulse-live"></span>
+                <span id="cam1-tally-text">REC</span>
+              </span>
+            </div>
+            <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between font-mono text-xs pointer-events-none">
+              <span class="px-2.5 py-0.5 rounded bg-white/90 text-zinc-900 border border-zinc-200">● Sync Locked</span>
+              <span class="px-2.5 py-0.5 rounded bg-white/90 text-zinc-600 border border-zinc-200">Eye-in-Hand</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Clean Black & White Transport Deck -->
+        <div class="rounded-xl border border-zinc-200 bg-zinc-50/70 p-5 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-baseline gap-3">
+              <span id="deck-timer" class="font-mono text-3xl font-bold tracking-tight text-zinc-950 tabular-nums">00.0s</span>
+              <span id="deck-subtimer" class="font-mono text-xs text-zinc-500">/ 25.0s 제한</span>
+            </div>
+
+            <div class="flex items-center gap-6 font-mono text-xs">
+              <div>
+                <span class="text-zinc-400">EPISODE </span>
+                <strong id="ep-counter" class="text-sm text-zinc-950 tabular-nums ml-1">0 / 10</strong>
+              </div>
+              <div>
+                <span class="text-zinc-400">SAVED </span>
+                <strong id="saved-counter" class="text-sm text-zinc-950 tabular-nums ml-1">3</strong>
+              </div>
+              <div>
+                <span class="text-zinc-400">DISCARDED </span>
+                <strong id="retry-counter" class="text-sm text-zinc-950 tabular-nums ml-1">0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Crisp Monochrome Progress Bar (Red only while actively recording) -->
+          <div class="w-full h-2 rounded-full bg-zinc-200 overflow-hidden">
+            <div id="ep-bar" class="h-full rounded-full bg-black transition-all duration-100" style="width:0%"></div>
+          </div>
+
+          <!-- 4 Pure Black & White High-Contrast Buttons -->
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 text-xs pt-0.5">
+            <button type="button" id="btn-rec-start" class="sm:col-span-3 px-4 py-3 rounded-xl font-semibold bg-black text-white hover:bg-zinc-800 active:scale-[0.99] transition-all flex items-center justify-center gap-2">
+              <span id="btn-start-dot" class="w-2 h-2 rounded-full bg-red-500"></span>
+              <span id="btn-start-label">수집 시작</span>
+            </button>
+
+            <button type="button" id="btn-rec-right" disabled class="sm:col-span-4 px-4 py-3 rounded-xl font-semibold border border-zinc-300 bg-white text-zinc-950 disabled:opacity-35 disabled:cursor-not-allowed hover:bg-zinc-100 active:scale-[0.99] transition-all flex items-center justify-between gap-2">
+              <span id="btn-right-label">조기종료 · Reset 이동</span>
+              <kbd class="font-mono px-1.5 py-0.5 rounded border border-current/25 text-[11px]">→</kbd>
+            </button>
+
+            <button type="button" id="btn-rec-left" disabled class="sm:col-span-3 px-4 py-3 rounded-xl font-semibold border border-zinc-300 bg-white text-zinc-950 disabled:opacity-35 disabled:cursor-not-allowed hover:bg-zinc-100 active:scale-[0.99] transition-all flex items-center justify-between gap-2">
+              <span id="btn-left-label">폐기 · Reset 이동</span>
+              <kbd class="font-mono px-1.5 py-0.5 rounded border border-zinc-300 text-[11px]">←</kbd>
+            </button>
+
+            <button type="button" id="btn-rec-esc" disabled class="sm:col-span-2 px-3.5 py-3 rounded-xl font-semibold border border-zinc-300 bg-white text-zinc-700 disabled:opacity-35 disabled:cursor-not-allowed hover:border-black hover:text-black active:scale-[0.99] transition-all flex items-center justify-between gap-1">
+              <span>종료</span>
+              <kbd class="font-mono px-1 py-0.5 rounded border border-zinc-300 text-[11px]">ESC</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Optional Fold: Telemetry & Logs -->
+      <details class="mono-card rounded-2xl px-6 py-4 group">
+        <summary class="cursor-pointer list-none flex items-center justify-between text-xs font-semibold text-zinc-600 hover:text-black">
+          <span>실시간 관절 파형 (`observation.state` / `action`) 및 이벤트 로그 보기</span>
+          <span class="font-mono text-xs group-open:rotate-180 transition-transform">▼</span>
+        </summary>
+        <div class="pt-4 mt-3.5 border-t border-zinc-200 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <canvas id="wave-canvas" width="540" height="110" class="w-full h-[110px] rounded-xl border border-zinc-200 bg-zinc-50"></canvas>
+            <div id="joint-readouts" class="grid grid-cols-3 gap-1.5 text-xs font-mono"></div>
+          </div>
+          <div id="log-box" class="h-[168px] overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 p-3 font-mono text-xs text-zinc-800 space-y-1.5"></div>
+        </div>
+      </details>
+    </section>
+
+    <!-- ==================== TAB 2: HARDWARE & TELEOP ==================== -->
+    <section id="tab-hw" class="tab-view hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="mono-card rounded-2xl p-6 space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-sm text-zinc-950">관절 오프셋 테스트 (`lerobot-teleoperate`)</span>
+          <button type="button" id="btn-zero-joints" class="px-3 py-1 rounded-full border border-zinc-300 text-xs font-medium hover:border-black">초기화</button>
+        </div>
+        <div id="teleop-sliders" class="grid grid-cols-2 gap-3 text-xs"></div>
+      </div>
+
+      <div class="mono-card rounded-2xl p-6 space-y-3 text-xs">
+        <div class="font-bold text-sm text-zinc-950">하드웨어 유틸리티 (`v0.4.4`)</div>
+        <select id="hw-tool-sel" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono">
+          <option value="calibrate">lerobot-calibrate — 캘리브레이션</option>
+          <option value="setup_motors">lerobot-setup-motors — 모터 ID 플래싱</option>
+          <option value="find_port">lerobot-find-port / find-cameras — 포트·카메라 스캔</option>
+          <option value="joint_limits">lerobot-find-joint-limits — 가동범위 추출</option>
+          <option value="replay">lerobot-replay — 에피소드 실기기 재생</option>
+        </select>
+        <pre id="hw-cmd-out" class="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed"></pre>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: DATASET v3.0 ==================== -->
+    <section id="tab-dataset" class="tab-view hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="mono-card rounded-2xl p-6 space-y-3">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-sm text-zinc-950">저장된 에피소드 (`LeRobotDataset v3.0`)</span>
+          <button type="button" id="btn-del-eps" class="px-3 py-1.5 rounded-full border border-zinc-900 text-xs font-semibold hover:bg-black hover:text-white transition-all">선택 삭제</button>
+        </div>
+        <table class="w-full text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-zinc-200 text-zinc-500 text-left">
+              <th class="py-2">선택</th>
+              <th class="py-2">Ep</th>
+              <th class="py-2">Task</th>
+              <th class="py-2">Frames</th>
+            </tr>
+          </thead>
+          <tbody id="ds-ep-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="mono-card rounded-2xl p-6 space-y-3">
+        <div class="font-bold text-sm text-zinc-950">`lerobot-edit-dataset` 명령 빌더</div>
+        <select id="ds-op-sel" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono text-xs">
+          <option value="delete_episodes">delete_episodes — 에피소드 삭제</option>
+          <option value="split">split — Train/Val 분할</option>
+          <option value="merge">merge — 데이터셋 병합</option>
+          <option value="remove_feature">remove_feature — 피처 제거</option>
+          <option value="modify_tasks">modify_tasks — 태스크 수정</option>
+          <option value="convert_image_to_video">convert_image_to_video — MP4 변환</option>
+        </select>
+        <pre id="ds-cmd-out" class="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed"></pre>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: TRAIN, EVAL & ASYNC ==================== -->
+    <section id="tab-train" class="tab-view hidden grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="mono-card rounded-2xl p-6 space-y-3 text-xs">
+        <div class="font-bold text-sm text-zinc-950">정책 학습 (`lerobot-train`) &amp; 평가 (`lerobot-eval`)</div>
+        <div class="grid grid-cols-2 gap-2">
+          <select id="tr-pol-sel" class="px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono">
+            <option value="act">act</option>
+            <option value="diffusion">diffusion</option>
+            <option value="smolvla">smolvla</option>
+            <option value="pi0">pi0</option>
+            <option value="pi05">pi05</option>
+            <option value="groot">groot</option>
+            <option value="xvla">xvla</option>
+            <option value="sac">sac</option>
+          </select>
+          <select id="ev-env-sel" class="px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono">
+            <option value="libero">eval: libero</option>
+            <option value="metaworld">eval: metaworld</option>
+            <option value="aloha">eval: aloha</option>
+            <option value="pusht">eval: pusht</option>
+          </select>
+        </div>
+        <pre id="tr-cmd-out" class="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed"></pre>
+        <pre id="ev-cmd-out" class="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed"></pre>
+      </div>
+
+      <div class="mono-card rounded-2xl p-6 space-y-3 text-xs">
+        <div class="font-bold text-sm text-zinc-950">비동기 추론 RTC (`policy_server` + `robot_client`)</div>
+        <pre class="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed"># GPU Policy Server
+python -m lerobot.async_inference.policy_server --host=127.0.0.1 --port=8080
+
+# Robot Client
+python -m lerobot.async_inference.robot_client \
+  --server_address=127.0.0.1:8080 --robot.type=so101_follower \
+  --policy_type=smolvla --pretrained_name_or_path=lerobot/smolvla_base \
+  --actions_per_chunk=50 --aggregate_fn_name=weighted_average</pre>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== SLIDE-OVER DRAWER (Crisp White & Black) ==================== -->
+  <div id="drawer-backdrop" class="fixed inset-0 bg-black/35 backdrop-blur-xs z-40 hidden"></div>
+  <aside id="settings-drawer" class="fixed top-0 right-0 bottom-0 w-full max-w-[480px] bg-white border-l border-zinc-200 z-50 translate-x-full transition-transform duration-200 flex flex-col shadow-2xl">
+    <div class="px-6 py-4 border-b border-zinc-200 flex items-center justify-between">
+      <div>
+        <h2 class="font-bold text-sm text-zinc-950">수집 파라미터 &amp; CLI / Python</h2>
+        <p class="text-xs text-zinc-500">`RecordConfig` · `DatasetRecordConfig` (`0.4.4`)</p>
+      </div>
+      <button type="button" id="btn-close-drawer" class="px-3 py-1 rounded-full border border-zinc-300 text-xs font-semibold hover:border-black">닫기 ✕</button>
+    </div>
+
+    <div class="p-6 overflow-y-auto flex-1 space-y-4 text-xs">
+      <div class="grid grid-cols-3 gap-1 p-1 rounded-full bg-zinc-100 border border-zinc-200">
+        <button type="button" data-mode="teleop" class="mode-btn py-1.5 rounded-full font-semibold bg-black text-white">Teleop 수집</button>
+        <button type="button" data-mode="policy" class="mode-btn py-1.5 rounded-full font-medium text-zinc-600">Policy 평가</button>
+        <button type="button" data-mode="hil" class="mode-btn py-1.5 rounded-full font-medium text-zinc-600">HIL (Both)</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-zinc-500 font-medium mb-1">Follower 로봇</label>
+          <select id="f-robot" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono">
+            <option value="so101_follower">so101_follower</option>
+            <option value="so100_follower">so100_follower</option>
+            <option value="bi_so100_follower">bi_so100_follower</option>
+            <option value="koch_follower">koch_follower</option>
+            <option value="lekiwi">lekiwi</option>
+            <option value="hope_jr">hope_jr</option>
+            <option value="unitree_g1">unitree_g1</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-zinc-500 font-medium mb-1">로봇 포트</label>
+          <input id="f-rport" type="text" value="/dev/ttyACM0" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+        <div class="teleop-row">
+          <label class="block text-zinc-500 font-medium mb-1">Leader 장치</label>
+          <select id="f-teleop" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono">
+            <option value="so101_leader">so101_leader</option>
+            <option value="so100_leader">so100_leader</option>
+            <option value="bi_so100_leader">bi_so100_leader</option>
+            <option value="koch_leader">koch_leader</option>
+            <option value="gamepad">gamepad</option>
+            <option value="phone">phone</option>
+          </select>
+        </div>
+        <div class="teleop-row">
+          <label class="block text-zinc-500 font-medium mb-1">리더 포트</label>
+          <input id="f-tport" type="text" value="/dev/ttyACM1" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+        <div id="policy-row" class="col-span-2 hidden">
+          <label class="block text-zinc-500 font-medium mb-1">정책 체크포인트 (`--policy.path`)</label>
+          <input id="f-polpath" type="text" value="outputs/train/act_so101/checkpoints/last/pretrained_model" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+
+        <div class="col-span-2 pt-2 border-t border-zinc-200">
+          <label class="block text-zinc-500 font-medium mb-1">데이터셋 Repo ID</label>
+          <input id="f-repo" type="text" value="lerobot_user/so101_pick_place" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-zinc-500 font-medium mb-1">작업 지시어 (`single_task`)</label>
+          <input id="f-task" type="text" value="Grab the red cube and place it into the target tray" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white" />
+        </div>
+
+        <div>
+          <label class="block text-zinc-500 font-medium mb-1">목표 에피소드 수</label>
+          <input id="f-numeps" type="number" value="10" min="1" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+        <div>
+          <label class="block text-zinc-500 font-medium mb-1">수집 FPS</label>
+          <input id="f-fps" type="number" value="30" min="5" max="120" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+        <div>
+          <label class="block text-zinc-500 font-medium mb-1">에피소드 시간(초)</label>
+          <input id="f-eptime" type="number" value="25" min="2" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+        <div>
+          <label class="block text-zinc-500 font-medium mb-1">환경 Reset 시간(초)</label>
+          <input id="f-rsttime" type="number" value="10" min="1" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono" />
+        </div>
+        <div>
+          <label class="block text-zinc-500 font-medium mb-1">비디오 코덱</label>
+          <select id="f-vcodec" class="w-full px-3 py-2 rounded-lg border border-zinc-300 bg-white font-mono">
+            <option value="libsvtav1">libsvtav1</option>
+            <option value="h264">h264</option>
+            <option value="hevc">hevc</option>
+          </select>
+        </div>
+        <div class="flex items-end pb-2">
+          <label class="inline-flex items-center gap-1.5 cursor-pointer font-medium"><input id="f-push" type="checkbox" class="accent-black" /> Hub 자동 업로드</label>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-zinc-200 space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="flex gap-1.5">
+            <button type="button" id="code-btn-cli" class="px-3 py-1 rounded-full font-semibold bg-black text-white">CLI 명령어</button>
+            <button type="button" id="code-btn-py" class="px-3 py-1 rounded-full border border-zinc-300 text-zinc-700">Python API</button>
+          </div>
+          <button type="button" id="btn-copy-code" class="px-3 py-1 rounded-full border border-zinc-300 font-mono">복사</button>
+        </div>
+        <pre id="code-output" class="p-4 rounded-xl bg-zinc-950 text-zinc-100 font-mono text-xs overflow-x-auto leading-relaxed"></pre>
+      </div>
+    </div>
+  </aside>
+
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const joints = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"];
+      const jointOffsets = { "shoulder_pan.pos": 0, "shoulder_lift.pos": 0, "elbow_flex.pos": 0, "wrist_flex.pos": 0, "wrist_roll.pos": 0, "gripper.pos": 0 };
+
+      const sim = {
+        mode: "teleop",
+        codeTab: "cli",
+        state: "IDLE", // IDLE | RECORDING | RESETTING | COMPLETED
+        curEp: 0,
+        resetNextEp: 0,
+        resetReason: "next",
+        targetEps: 10,
+        elapsed: 0,
+        targetTime: 25,
+        frames: 0,
+        retries: 0,
+        episodes: [
+          { idx: 0, task: "Grab the red cube and place it into the target tray", frames: 450 },
+          { idx: 1, task: "Grab the red cube and place it into the target tray", frames: 480 },
+          { idx: 2, task: "Grab the red cube and place it into the target tray", frames: 390 },
+        ],
+        wave: [],
+        lastTs: performance.now(),
+      };
+
+      function log(lvl, msg) {
+        const box = $("log-box");
+        const t = new Date().toTimeString().slice(0, 8);
+        const line = document.createElement("div");
+        line.innerHTML = `<span class="text-zinc-400">[${t}]</span> <span class="font-bold text-black">[${lvl}]</span> <span>${msg}</span>`;
+        box.appendChild(line);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function toggleDrawer(open) {
+        $("drawer-backdrop").classList.toggle("hidden", !open);
+        $("settings-drawer").classList.toggle("translate-x-full", !open);
+      }
+      $("btn-open-drawer").addEventListener("click", () => toggleDrawer(true));
+      $("btn-open-drawer-inline").addEventListener("click", () => toggleDrawer(true));
+      $("btn-close-drawer").addEventListener("click", () => toggleDrawer(false));
+      $("drawer-backdrop").addEventListener("click", () => toggleDrawer(false));
+
+      document.querySelectorAll(".nav-tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".nav-tab").forEach((b) => {
+            const active = b.dataset.tab === btn.dataset.tab;
+            b.className = active
+              ? "nav-tab px-3.5 py-1.5 rounded-full font-semibold bg-black text-white transition-all"
+              : "nav-tab px-3.5 py-1.5 rounded-full font-medium text-zinc-500 hover:text-black transition-all";
+          });
+          document.querySelectorAll(".tab-view").forEach((v) => v.classList.add("hidden"));
+          $(btn.dataset.tab).classList.remove("hidden");
+        });
+      });
+
+      document.querySelectorAll(".mode-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          sim.mode = btn.dataset.mode;
+          document.querySelectorAll(".mode-btn").forEach((b) => {
+            b.className = "mode-btn py-1.5 rounded-full font-medium text-zinc-600";
+          });
+          btn.className = "mode-btn py-1.5 rounded-full font-semibold bg-black text-white";
+          document.querySelectorAll(".teleop-row").forEach((el) => el.classList.toggle("hidden", sim.mode === "policy"));
+          $("policy-row").classList.toggle("hidden", sim.mode === "teleop");
+          updateCode();
+        });
+      });
+
+      function updateCode() {
+        const rType = $("f-robot").value;
+        const rPort = $("f-rport").value.trim();
+        const tType = $("f-teleop").value;
+        const tPort = $("f-tport").value.trim();
+        const polPath = $("f-polpath").value.trim();
+        const repo = $("f-repo").value.trim();
+        const task = $("f-task").value.trim();
+        const numEps = Number($("f-numeps").value) || 10;
+        const fps = Number($("f-fps").value) || 30;
+        const epTime = Number($("f-eptime").value) || 25;
+        const rstTime = Math.max(1, Number($("f-rsttime").value) || 10);
+        const vcodec = $("f-vcodec").value;
+        const push = $("f-push").checked;
+
+        $("summary-robot").textContent = rType;
+        $("summary-repo").textContent = repo;
+        $("summary-task").textContent = `"${task}"`;
+        $("cam0-codec").textContent = `MP4 · ${vcodec}`;
+        $("cam0-lbl").textContent = `front · ${fps}fps`;
+        $("cam1-lbl").textContent = `wrist · ${fps}fps`;
+
+        const cli = [
+          `lerobot-record \\`,
+          `  --robot.type=${rType} --robot.port=${rPort} --robot.id=my_${rType} \\`,
+          `  --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: ${fps}}, wrist: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: ${fps}} }" \\`,
+          ...(sim.mode !== "policy" ? [`  --teleop.type=${tType} --teleop.port=${tPort} --teleop.id=my_${tType} \\`] : []),
+          ...(sim.mode !== "teleop" ? [`  --policy.path="${polPath}" \\`] : []),
+          `  --dataset.repo_id=${repo} \\`,
+          `  --dataset.single_task="${task}" \\`,
+          `  --dataset.fps=${fps} --dataset.num_episodes=${numEps} \\`,
+          `  --dataset.episode_time_s=${epTime} --dataset.reset_time_s=${rstTime} \\`,
+          `  --dataset.vcodec=${vcodec} --dataset.push_to_hub=${push}`,
+        ].join("\n");
+
+        const py = `from lerobot.scripts.lerobot_record import DatasetRecordConfig, RecordConfig, record
+
+cfg = RecordConfig(
+    dataset=DatasetRecordConfig(
+        repo_id="${repo}",
+        single_task="${task}",
+        fps=${fps},
+        num_episodes=${numEps},
+        episode_time_s=${epTime},
+        reset_time_s=${rstTime},
+        vcodec="${vcodec}",
+    ),
+)
+record(cfg)`;
+
+        $("code-output").textContent = sim.codeTab === "cli" ? cli : py;
+      }
+
+      $("code-btn-cli").addEventListener("click", () => {
+        sim.codeTab = "cli";
+        $("code-btn-cli").className = "px-3 py-1 rounded-full font-semibold bg-black text-white";
+        $("code-btn-py").className = "px-3 py-1 rounded-full border border-zinc-300 text-zinc-700";
+        updateCode();
+      });
+      $("code-btn-py").addEventListener("click", () => {
+        sim.codeTab = "py";
+        $("code-btn-py").className = "px-3 py-1 rounded-full font-semibold bg-black text-white";
+        $("code-btn-cli").className = "px-3 py-1 rounded-full border border-zinc-300 text-zinc-700";
+        updateCode();
+      });
+      $("btn-copy-code").addEventListener("click", async () => {
+        await navigator.clipboard.writeText($("code-output").textContent);
+        $("btn-copy-code").textContent = "복사됨";
+        setTimeout(() => ($("btn-copy-code").textContent = "복사"), 1200);
+      });
+      ["f-robot", "f-rport", "f-teleop", "f-tport", "f-polpath", "f-repo", "f-task", "f-numeps", "f-fps", "f-eptime", "f-rsttime", "f-vcodec", "f-push"].forEach((id) => {
+        $(id).addEventListener("input", updateCode);
+        $(id).addEventListener("change", updateCode);
+      });
+
+      function saveCurrentEpisode() {
+        const f = Math.max(1, sim.frames);
+        sim.episodes.push({ idx: sim.curEp, task: $("f-task").value, frames: f });
+        renderEpisodes();
+        log("SAVED", `Episode #${sim.curEp} 저장 완료 (${f} frames)`);
+      }
+
+      function enterRecordingEpisode(epIndex) {
+        sim.curEp = epIndex;
+        sim.resetNextEp = epIndex;
+        sim.state = "RECORDING";
+        sim.elapsed = 0;
+        sim.targetTime = Math.max(2, Number($("f-eptime").value) || 25);
+        sim.frames = 0;
+        log("REC", `Episode #${sim.curEp} 녹화 시작`);
+        syncVisualState();
+      }
+
+      function enterResetPhase(nextEpIdx, reason) {
+        const cfgRst = Number($("f-rsttime").value);
+        const resetSec = cfgRst > 0 ? cfgRst : 8;
+        sim.resetNextEp = nextEpIdx;
+        sim.resetReason = reason;
+        sim.state = "RESETTING";
+        sim.elapsed = 0;
+        sim.targetTime = resetSec;
+        sim.frames = 0;
+        log("RESET", `${reason === "discard" ? `Episode #${nextEpIdx} 폐기됨` : `Episode #${sim.curEp} 저장됨`} → 환경 Reset (${resetSec}s)`);
+        syncVisualState();
+      }
+
+      function startSession() {
+        sim.targetEps = Math.max(1, Number($("f-numeps").value) || 10);
+        sim.episodes = [];
+        sim.retries = 0;
+        renderEpisodes();
+        enterRecordingEpisode(0);
+      }
+
+      function triggerRightArrow() {
+        if (sim.state === "RECORDING") {
+          saveCurrentEpisode();
+          if (sim.curEp + 1 >= sim.targetEps) {
+            sim.state = "COMPLETED";
+            log("DONE", `총 ${sim.targetEps}개 에피소드 수집 완료`);
+            syncVisualState();
+          } else {
+            enterResetPhase(sim.curEp + 1, "next");
+          }
+        } else if (sim.state === "RESETTING") {
+          enterRecordingEpisode(sim.resetNextEp);
+        }
+      }
+
+      function triggerLeftArrow() {
+        if (sim.state === "RECORDING") {
+          sim.retries++;
+          enterResetPhase(sim.curEp, "discard");
+        } else if (sim.state === "RESETTING") {
+          if (sim.episodes.length && sim.episodes[sim.episodes.length - 1].idx === sim.curEp) {
+            sim.episodes.pop();
+            renderEpisodes();
+          }
+          sim.retries++;
+          enterResetPhase(sim.curEp, "discard");
+        }
+      }
+
+      function triggerEscape() {
+        if (sim.state === "RECORDING" || sim.state === "RESETTING") {
+          if (sim.state === "RECORDING" && sim.frames > 15) saveCurrentEpisode();
+          sim.state = "COMPLETED";
+          log("DONE", `세션 종료 및 비디오 인코딩 완료`);
+          syncVisualState();
+        }
+      }
+
+      function syncVisualState() {
+        const st = sim.state;
+        const gPill = $("global-rec-pill");
+        const gDot = $("global-rec-dot");
+        const gText = $("global-rec-text");
+        const gSub = $("global-rec-sub");
+
+        const sBanner = $("stage-banner");
+        const bDot = $("banner-dot");
+        const bChip = $("banner-chip");
+        const bMsg = $("banner-msg");
+        const bHint = $("banner-hint");
+
+        const c0F = $("cam0-frame"), c1F = $("cam1-frame");
+        const c0T = $("cam0-tally"), c1T = $("cam1-tally");
+        const c0TT = $("cam0-tally-text"), c1TT = $("cam1-tally-text");
+
+        const btnStartLbl = $("btn-start-label");
+        const btnRight = $("btn-rec-right");
+        const btnRightLbl = $("btn-right-label");
+        const btnLeft = $("btn-rec-left");
+        const btnLeftLbl = $("btn-left-label");
+        const btnEsc = $("btn-rec-esc");
+        const bar = $("ep-bar");
+
+        if (st === "RECORDING") {
+          gPill.className = "flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-red-600 bg-red-600 text-white text-xs font-semibold transition-all shadow-xs";
+          gDot.className = "w-2 h-2 rounded-full bg-white pulse-live";
+          gText.textContent = `● 녹화 중 · EP #${sim.curEp}`;
+          gSub.className = "font-mono text-red-100 tabular-nums";
+
+          sBanner.className = "rounded-xl px-4 py-3 border-2 border-black bg-white flex flex-wrap items-center justify-between gap-3 transition-all";
+          bDot.className = "w-2.5 h-2.5 rounded-full bg-red-600 pulse-live";
+          bChip.className = "font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-red-600 text-white";
+          bChip.textContent = "● REC LIVE";
+          bMsg.textContent = `Episode #${sim.curEp} 프레임을 실시간 기록 중입니다`;
+          bHint.innerHTML = `완료 시 <strong>[→ 조기종료]</strong> · 실수 시 <strong>[← 폐기]</strong> 클릭 시 모두 환경 Reset으로 이동`;
+
+          c0F.className = "relative rounded-xl overflow-hidden border border-red-600 bg-zinc-100 aspect-[16/10] cam-ring-rec transition-all";
+          c1F.className = "relative rounded-xl overflow-hidden border border-red-600 bg-zinc-100 aspect-[16/10] cam-ring-rec transition-all";
+          c0T.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white font-mono text-xs font-bold shadow-sm";
+          c1T.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-red-600 text-white font-mono text-xs font-bold shadow-sm";
+          c0TT.textContent = `REC · EP #${sim.curEp}`;
+          c1TT.textContent = `REC · EP #${sim.curEp}`;
+
+          bar.className = "h-full rounded-full bg-red-600 transition-all duration-100";
+          btnStartLbl.textContent = "재시작";
+
+          btnRight.disabled = false;
+          btnRight.className = "sm:col-span-4 px-4 py-3 rounded-xl font-semibold border-2 border-black bg-white text-black hover:bg-zinc-100 active:scale-[0.99] transition-all flex items-center justify-between gap-2";
+          btnRightLbl.textContent = "조기종료 · Reset 이동";
+
+          btnLeft.disabled = false;
+          btnLeftLbl.textContent = "폐기 · Reset 이동";
+          btnEsc.disabled = false;
+        } else if (st === "RESETTING") {
+          const isDiscard = sim.resetReason === "discard";
+          gPill.className = "flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-black bg-black text-white text-xs font-semibold transition-all";
+          gDot.className = "w-2 h-2 rounded-full bg-white pulse-live";
+          gText.textContent = isDiscard
+            ? `⟳ 폐기됨 · Reset 중 (EP #${sim.resetNextEp})`
+            : `⟳ 환경 Reset 중 (다음 EP #${sim.resetNextEp})`;
+          gSub.className = "font-mono text-zinc-300 tabular-nums";
+
+          sBanner.className = "rounded-xl px-4 py-3 border border-black bg-zinc-950 text-white flex flex-wrap items-center justify-between gap-3 transition-all";
+          bDot.className = "w-2.5 h-2.5 rounded-full bg-white pulse-live";
+          bChip.className = "font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-white text-black";
+          bChip.textContent = isDiscard ? "DISCARDED · RESET" : "ENV RESET";
+          bMsg.className = "text-sm font-semibold text-white";
+          bMsg.textContent = isDiscard
+            ? `에피소드 폐기됨 — 물체를 시작 위치로 놓아주세요 (EP #${sim.resetNextEp} 재녹화 대기)`
+            : `Episode #${sim.curEp} 저장 완료 — 다음 녹화를 위해 환경을 정리해 주세요`;
+          bHint.className = "text-xs text-zinc-300";
+          bHint.innerHTML = `정리가 끝났다면 <strong>[▶ 지금 바로 기록 시작 (→)]</strong>을 눌러 대기 없이 즉시 녹화하세요`;
+
+          c0F.className = "relative rounded-xl overflow-hidden border border-black bg-zinc-100 aspect-[16/10] cam-ring-reset transition-all";
+          c1F.className = "relative rounded-xl overflow-hidden border border-black bg-zinc-100 aspect-[16/10] cam-ring-reset transition-all";
+          c0T.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-black text-white font-mono text-xs font-bold shadow-sm";
+          c1T.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-black text-white font-mono text-xs font-bold shadow-sm";
+          c0TT.textContent = "PAUSED · RESET";
+          c1TT.textContent = "PAUSED · RESET";
+
+          bar.className = "h-full rounded-full bg-black transition-all duration-100";
+
+          btnRight.disabled = false;
+          btnRight.className = "sm:col-span-4 px-4 py-3 rounded-xl font-semibold bg-black text-white hover:bg-zinc-800 active:scale-[0.99] transition-all flex items-center justify-between gap-2 shadow-sm";
+          btnRightLbl.textContent = `▶ 지금 바로 기록 시작 (EP #${sim.resetNextEp})`;
+
+          btnLeft.disabled = isDiscard;
+          btnLeftLbl.textContent = isDiscard ? "Reset 대기 중" : "직전 저장 취소 · Reset";
+          btnEsc.disabled = false;
+        } else if (st === "COMPLETED") {
+          gPill.className = "flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-black bg-white text-black text-xs font-semibold transition-all";
+          gDot.className = "w-2 h-2 rounded-full bg-black";
+          gText.textContent = `✓ 수집 완료 (${sim.episodes.length} eps)`;
+          gSub.className = "font-mono text-zinc-500 tabular-nums";
+
+          sBanner.className = "rounded-xl px-4 py-3 border border-zinc-300 bg-zinc-50 flex flex-wrap items-center justify-between gap-3 transition-all";
+          bDot.className = "w-2.5 h-2.5 rounded-full bg-black";
+          bChip.className = "font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-black text-white";
+          bChip.textContent = "COMPLETED";
+          bMsg.className = "text-sm font-semibold text-zinc-950";
+          bMsg.textContent = `수집 및 비디오 인코딩 완료 (${sim.episodes.length}개 에피소드 저장됨)`;
+          bHint.className = "text-xs text-zinc-500";
+          bHint.textContent = "상단 [데이터셋] 탭에서 저장된 에피소드를 확인하세요";
+
+          c0F.className = "relative rounded-xl overflow-hidden border border-zinc-300 bg-zinc-100 aspect-[16/10] transition-all";
+          c1F.className = "relative rounded-xl overflow-hidden border border-zinc-300 bg-zinc-100 aspect-[16/10] transition-all";
+          c0T.className = "hidden";
+          c1T.className = "hidden";
+
+          bar.className = "h-full rounded-full bg-black transition-all duration-100";
+          btnStartLbl.textContent = "새 세션 시작";
+          btnRight.disabled = true;
+          btnRight.className = "sm:col-span-4 px-4 py-3 rounded-xl font-semibold border border-zinc-300 bg-white text-zinc-950 disabled:opacity-35 disabled:cursor-not-allowed flex items-center justify-between gap-2";
+          btnRightLbl.textContent = "조기종료 · Reset 이동";
+          btnLeft.disabled = true;
+          btnLeftLbl.textContent = "폐기 · Reset 이동";
+          btnEsc.disabled = true;
+        } else {
+          gPill.className = "flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-zinc-300 bg-zinc-50 text-zinc-900 text-xs font-semibold transition-all";
+          gDot.className = "w-2 h-2 rounded-full bg-zinc-400";
+          gText.textContent = "STANDBY · 대기 중";
+          gSub.className = "font-mono text-zinc-500 tabular-nums";
+
+          sBanner.className = "rounded-xl px-4 py-3 border border-zinc-200 bg-zinc-50 flex flex-wrap items-center justify-between gap-3 transition-all";
+          bDot.className = "w-2.5 h-2.5 rounded-full bg-zinc-400";
+          bChip.className = "font-mono text-[11px] font-bold px-2.5 py-0.5 rounded bg-zinc-200 text-zinc-900";
+          bChip.textContent = "STANDBY";
+          bMsg.className = "text-sm font-semibold text-zinc-950";
+          bMsg.textContent = "[수집 시작]을 누르면 에피소드 기록이 시작됩니다";
+          bHint.className = "text-xs text-zinc-500";
+          bHint.innerHTML = `조기종료(<kbd class="font-mono px-1.5 py-0.5 rounded border border-zinc-300 bg-white text-zinc-900">→</kbd>) · 폐기(<kbd class="font-mono px-1.5 py-0.5 rounded border border-zinc-300 bg-white text-zinc-900">←</kbd>) 모두 <strong>환경 Reset</strong>으로 이동`;
+
+          c0F.className = "relative rounded-xl overflow-hidden border border-zinc-300 bg-zinc-100 aspect-[16/10] transition-all";
+          c1F.className = "relative rounded-xl overflow-hidden border border-zinc-300 bg-zinc-100 aspect-[16/10] transition-all";
+          c0T.className = "hidden";
+          c1T.className = "hidden";
+
+          btnStartLbl.textContent = "수집 시작";
+          btnRight.disabled = true;
+          btnLeft.disabled = true;
+          btnEsc.disabled = true;
+        }
+      }
+
+      $("btn-rec-start").addEventListener("click", startSession);
+      $("btn-rec-right").addEventListener("click", triggerRightArrow);
+      $("btn-rec-left").addEventListener("click", triggerLeftArrow);
+      $("btn-rec-esc").addEventListener("click", triggerEscape);
+
+      window.addEventListener("keydown", (e) => {
+        const tag = (e.target?.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "select" || tag === "textarea") return;
+        if (e.key === "ArrowRight") { e.preventDefault(); triggerRightArrow(); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); triggerLeftArrow(); }
+        if (e.key === "Escape") { e.preventDefault(); triggerEscape(); }
+      });
+
+      const sliderWrap = $("teleop-sliders");
+      sliderWrap.innerHTML = joints.map((j) => `
+        <div>
+          <div class="flex justify-between font-mono text-zinc-700 mb-1"><span>${j}</span><span id="sl-v-${j}">0°</span></div>
+          <input type="range" min="-45" max="45" value="0" data-j="${j}" class="w-full accent-black" />
+        </div>
+      `).join("");
+      sliderWrap.querySelectorAll("input").forEach((inp) => {
+        inp.addEventListener("input", (e) => {
+          const j = e.target.dataset.j;
+          jointOffsets[j] = Number(e.target.value);
+          $(`sl-v-${j}`).textContent = `${jointOffsets[j]}°`;
+        });
+      });
+      $("btn-zero-joints").addEventListener("click", () => {
+        sliderWrap.querySelectorAll("input").forEach((inp) => {
+          inp.value = 0;
+          jointOffsets[inp.dataset.j] = 0;
+          $(`sl-v-${inp.dataset.j}`).textContent = "0°";
+        });
+      });
+
+      function renderEpisodes() {
+        $("nav-ep-cnt").textContent = sim.episodes.length;
+        $("saved-counter").textContent = sim.episodes.length;
+        $("ds-ep-tbody").innerHTML = sim.episodes.map((ep) => `
+          <tr class="border-b border-zinc-200">
+            <td class="py-2.5"><input type="checkbox" class="ep-chk accent-black" value="${ep.idx}" /></td>
+            <td class="py-2.5 font-mono font-bold">#${ep.idx}</td>
+            <td class="py-2.5 text-zinc-800">${ep.task}</td>
+            <td class="py-2.5 font-mono text-zinc-600">${ep.frames}</td>
+          </tr>
+        `).join("");
+      }
+
+      $("btn-del-eps").addEventListener("click", () => {
+        const chk = new Set(Array.from(document.querySelectorAll(".ep-chk:checked")).map((c) => Number(c.value)));
+        if (!chk.size) return;
+        sim.episodes = sim.episodes.filter((e) => !chk.has(e.idx)).map((e, i) => ({ ...e, idx: i }));
+        renderEpisodes();
+      });
+
+      function updateSecondary() {
+        const hwMap = {
+          calibrate: `lerobot-calibrate --robot.type=so101_follower --robot.port=/dev/ttyACM0 --robot.id=my_so101_follower\nlerobot-calibrate --teleop.type=so101_leader --teleop.port=/dev/ttyACM1 --teleop.id=my_so101_leader`,
+          setup_motors: `lerobot-setup-motors --robot.type=so101_follower --robot.port=/dev/ttyACM0`,
+          find_port: `lerobot-find-port\nlerobot-find-cameras`,
+          joint_limits: `lerobot-find-joint-limits --robot.type=so101_follower --robot.port=/dev/ttyACM0 --teleop.type=so101_leader --teleop.port=/dev/ttyACM1`,
+          replay: `lerobot-replay --robot.type=so101_follower --robot.port=/dev/ttyACM0 --dataset.repo_id=lerobot_user/so101_pick_place --dataset.episode=0`,
+        };
+        $("hw-cmd-out").textContent = hwMap[$("hw-tool-sel").value];
+
+        const op = $("ds-op-sel").value;
+        const opMap = {
+          delete_episodes: `lerobot-edit-dataset --repo_id lerobot_user/so101_pick_place \\\n  --operation.type delete_episodes --operation.episode_indices "[0]"`,
+          split: `lerobot-edit-dataset --repo_id lerobot_user/so101_pick_place \\\n  --operation.type split --operation.splits '{"train": 0.8, "val": 0.2}'`,
+          merge: `lerobot-edit-dataset --repo_id lerobot_user/so101_merged \\\n  --operation.type merge --operation.repo_ids "['user/s1', 'user/s2']"`,
+          remove_feature: `lerobot-edit-dataset --repo_id lerobot_user/so101_pick_place \\\n  --operation.type remove_feature --operation.feature_names "['observation.images.wrist']"`,
+          modify_tasks: `lerobot-edit-dataset --repo_id lerobot_user/so101_pick_place \\\n  --operation.type modify_tasks --operation.new_task "Pick red cube"`,
+          convert_image_to_video: `lerobot-edit-dataset --repo_id lerobot_user/so101_pick_place \\\n  --operation.type convert_image_to_video`,
+        };
+        $("ds-cmd-out").textContent = opMap[op];
+
+        const p = $("tr-pol-sel").value;
+        $("tr-cmd-out").textContent = `lerobot-train --dataset.repo_id=lerobot_user/so101_pick_place --policy.type=${p} --steps=100000 --batch_size=8`;
+        $("ev-cmd-out").textContent = `lerobot-eval --policy.path=lerobot/pi0_libero_finetuned --env.type=${$("ev-env-sel").value} --eval.n_episodes=10`;
+      }
+      ["hw-tool-sel", "ds-op-sel", "tr-pol-sel", "ev-env-sel"].forEach((id) => $(id).addEventListener("change", updateSecondary));
+
+      function tick(now) {
+        const dt = Math.min(0.1, (now - sim.lastTs) / 1000);
+        sim.lastTs = now;
+        const fps = Number($("f-fps").value) || 30;
+
+        if (sim.state === "RECORDING") {
+          sim.elapsed += dt;
+          sim.frames = Math.floor(sim.elapsed * fps);
+          if (sim.elapsed >= sim.targetTime) triggerRightArrow();
+        } else if (sim.state === "RESETTING") {
+          sim.elapsed += dt;
+          if (sim.elapsed >= sim.targetTime) enterRecordingEpisode(sim.resetNextEp);
+        }
+
+        if (sim.state === "RESETTING") {
+          const remain = Math.max(0, sim.targetTime - sim.elapsed);
+          $("deck-timer").textContent = `${remain.toFixed(1)}s`;
+          $("deck-subtimer").textContent = `남음 (Reset ${sim.targetTime.toFixed(0)}s)`;
+          $("global-rec-sub").textContent = `-${remain.toFixed(1)}s`;
+        } else {
+          $("deck-timer").textContent = `${sim.elapsed.toFixed(1)}s`;
+          $("deck-subtimer").textContent = `/ ${sim.targetTime.toFixed(1)}s 제한`;
+          $("global-rec-sub").textContent = `${sim.elapsed.toFixed(1)}s`;
+        }
+
+        $("cam0-tc").textContent = `00:${sim.elapsed.toFixed(1).padStart(4, "0")} · F:${String(sim.frames).padStart(4, "0")}`;
+        $("ep-counter").textContent = `${sim.curEp} / ${sim.targetEps}`;
+        $("retry-counter").textContent = sim.retries;
+
+        const pct = sim.targetTime > 0 ? Math.min(100, (sim.elapsed / sim.targetTime) * 100) : 0;
+        $("ep-bar").style.width = `${sim.state === "COMPLETED" ? 100 : sim.state === "RESETTING" ? 100 - pct : pct}%`;
+
+        const t = now / 1000;
+        const obs = {}, act = {};
+        joints.forEach((j, idx) => {
+          const amp = j === "gripper.pos" ? 28 : 36;
+          const base = j === "gripper.pos" ? 42 : 0;
+          act[j] = base + amp * Math.sin(t * (1.1 + idx * 0.16) + idx) + jointOffsets[j];
+          obs[j] = base + amp * Math.sin((t - 0.035) * (1.1 + idx * 0.16) + idx) + jointOffsets[j];
+        });
+
+        $("hdr-fps").textContent = `${(fps - 0.1 * Math.abs(Math.sin(t * 2))).toFixed(1)} Hz`;
+        $("joint-readouts").innerHTML = joints.map((j) => `
+          <div class="px-2.5 py-1 rounded-md border border-zinc-200 bg-white flex justify-between">
+            <span class="text-zinc-500">${j.replace(".pos", "")}</span>
+            <span class="font-semibold text-zinc-950 tabular-nums">${obs[j].toFixed(0)}°</span>
+          </div>
+        `).join("");
+
+        sim.wave.push({ obs: obs["shoulder_pan.pos"], act: act["shoulder_pan.pos"] });
+        if (sim.wave.length > 120) sim.wave.shift();
+
+        drawWave();
+        drawCams(obs);
+        requestAnimationFrame(tick);
+      }
+
+      function drawWave() {
+        const c = $("wave-canvas");
+        if (!c) return;
+        const ctx = c.getContext("2d");
+        ctx.clearRect(0, 0, c.width, c.height);
+        const plot = (k, col, dash) => {
+          ctx.save();
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1.8;
+          if (dash) ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          sim.wave.forEach((p, i) => {
+            const x = (i / 119) * c.width;
+            const y = c.height / 2 - (p[k] / 90) * (c.height * 0.42);
+            i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+          });
+          ctx.stroke();
+          ctx.restore();
+        };
+        plot("act", "#a1a1aa", true);
+        plot("obs", sim.state === "RECORDING" ? "#dc2626" : "#09090b", false);
+      }
+
+      // Crisp Light-Studio Architectural Camera Feed
+      function drawCams(obs) {
+        const j0 = obs["shoulder_pan.pos"] * (Math.PI / 180);
+        const j1 = obs["shoulder_lift.pos"] * (Math.PI / 180);
+        const grip = obs["gripper.pos"];
+
+        // Cam 0: Clean Bright Studio Lab Table
+        const c0 = $("cam0");
+        const ctx0 = c0.getContext("2d");
+        ctx0.fillStyle = "#f4f4f5";
+        ctx0.fillRect(0, 0, c0.width, c0.height);
+
+        // White worktable mat with crisp border
+        ctx0.fillStyle = "#ffffff";
+        ctx0.strokeStyle = "#d4d4d8";
+        ctx0.lineWidth = 1.5;
+        ctx0.beginPath();
+        ctx0.roundRect(54, c0.height - 122, c0.width - 108, 80, 10);
+        ctx0.fill();
+        ctx0.stroke();
+
+        // Target placement zone (dashed black square)
+        ctx0.save();
+        ctx0.strokeStyle = "#18181b";
+        ctx0.lineWidth = 1.8;
+        ctx0.setLineDash([5, 4]);
+        ctx0.strokeRect(c0.width - 165, c0.height - 104, 72, 44);
+        ctx0.restore();
+
+        // Manipulation Target Object
+        ctx0.fillStyle = "#dc2626";
+        ctx0.fillRect(150 + Math.sin(j0) * 34, c0.height - 92, 24, 24);
+
+        // Sleek Jet-Black Robotic Arm
+        const bx = c0.width / 2, by = c0.height - 54;
+        const x1 = bx + Math.sin(j0) * 76, y1 = by - 82;
+        const x2 = x1 + Math.cos(j1 + 0.5) * 70, y2 = y1 - 50;
+
+        ctx0.strokeStyle = "#18181b";
+        ctx0.lineWidth = 9;
+        ctx0.lineCap = "round";
+        ctx0.beginPath();
+        ctx0.moveTo(bx, by);
+        ctx0.lineTo(x1, y1);
+        ctx0.lineTo(x2, y2);
+        ctx0.stroke();
+
+        [[bx, by], [x1, y1], [x2, y2]].forEach(([jx, jy]) => {
+          ctx0.fillStyle = "#ffffff";
+          ctx0.strokeStyle = "#09090b";
+          ctx0.lineWidth = 2.5;
+          ctx0.beginPath();
+          ctx0.arc(jx, jy, 5.5, 0, Math.PI * 2);
+          ctx0.fill();
+          ctx0.stroke();
+        });
+
+        // Cam 1: Clean Light Wrist View
+        const c1 = $("cam1");
+        const ctx1 = c1.getContext("2d");
+        ctx1.fillStyle = "#f1f1f3";
+        ctx1.fillRect(0, 0, c1.width, c1.height);
+
+        // Minimal reticle
+        ctx1.strokeStyle = "rgba(9, 9, 11, 0.18)";
+        ctx1.lineWidth = 1;
+        ctx1.beginPath();
+        ctx1.moveTo(c1.width / 2 - 28, c1.height / 2);
+        ctx1.lineTo(c1.width / 2 + 28, c1.height / 2);
+        ctx1.moveTo(c1.width / 2, c1.height / 2 - 28);
+        ctx1.lineTo(c1.width / 2, c1.height / 2 + 28);
+        ctx1.stroke();
+
+        const cx = c1.width / 2 + Math.sin(j0) * 48;
+        const cy = c1.height / 2 + Math.cos(j1) * 26;
+        ctx1.fillStyle = "#dc2626";
+        ctx1.fillRect(cx - 25, cy - 25, 50, 50);
+
+        const gap = 36 + (grip / 80) * 52;
+        ctx1.fillStyle = "#18181b";
+        ctx1.fillRect(c1.width / 2 - gap - 16, c1.height - 78, 16, 78);
+        ctx1.fillRect(c1.width / 2 + gap, c1.height - 78, 16, 78);
+      }
+
+      log("READY", "skillTransfer Studio (LeRobot v0.4.4) 준비 완료");
+      updateCode();
+      renderEpisodes();
+      updateSecondary();
+      syncVisualState();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
